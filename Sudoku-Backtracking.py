@@ -1,108 +1,115 @@
 
-def block_set(x,y,current_board):
-    ''' Returns a set of values from the current block depending on the current x,y coordinate'''
-    
-    x_block = None
-    y_block = None
-    
-    blocks = [ range(3) , range(3,6) , range(6,9)] #game board is a 9x9 grid denoted into blocks of 3x3 
-    
-    t = 0
-    
-    while (x_block != None and y_block != None) == False: #loop until range iterators are found
-        if x in blocks[t]:
-            x_block = blocks[t]
-        if y in blocks[t]:
-            y_block = blocks[t]
-        t += 1
+from tkinter import *
 
-    returned_block_set = { current_board[yb][xb] for yb in y_block for xb in x_block if current_board[yb][xb] > 0}
-    
-    return  returned_block_set
+#root= Tk()
 
-def used_set(row_number,column_number,game):
+def used_set(row,col,current_board):
     ''' returns a set of invalid values for the given coordinate'''
 
-    used_horizontal = {s for s in game[row_number] if s > 0}
+    blocks = [ range(3) , range(3,6) , range(6,9)] #game board is a 9x9 grid denoted into blocks of 3x3 
+    
+    for block in blocks:
 
-    used_vertical = {s[column_number] for s in game if s[column_number] > 0}
+        if row in block:
+            row_block = block
+        if col in block:
+            col_block = block
 
-    used_block = block_set(column_number,row_number,game)
+    used_block = { current_board[yb][xb] for yb in row_block for xb in col_block if current_board[yb][xb] != 0}
+    
+    used_horizontal = {s for s in current_board[row] if s != 0}
+
+    used_vertical = {s[col] for s in current_board if s[col] != 0}
 
     return used_horizontal.union(used_vertical).union(used_block)
 
-def return_possible_numbers(game):
+def return_block_number(coord):
+    
+    ''' returns which block the current coordinate is in'''
+    block_number= (coord[0] // 3) + (3 * (coord[1] // 3))
+
+    return block_number
+
+def return_possible_numbers(game,queried_points=None,input_coord=()):
 
     ''' returns a dictionary compiled of possible sets of numbers for unfilled coordinates'''
     available_numbers=set(range(1,10))
-    coord_dict = {}
 
-    for row in range(len(game)):     # Loop values to find available numbers
+    if queried_points != None:
+        
+        input_coord_block=return_block_number(input_coord)
 
-        for column in range(len(game[row])):
+        for key in queried_points:
+            #if the coordinate is affected by the input_coord being applied
+            if key[0] == input_coord[0] or key[1] == input_coord[1] or return_block_number(key) == input_coord_block:
+            
+                queried_points[key] = available_numbers.difference(used_set(key[1],key[0],game))
 
-            if game[row][column] == 0:  #if equal to 0 then the number hasn't been filled
+        return queried_points    
 
-                useable_numbers = available_numbers.difference(used_set(row,column,game))
-                #set of numbers available for the current coordinate
-                
-                coord_dict[(column,row)] = useable_numbers.copy()
+    else:
 
-                useable_numbers.clear()
+        coord_dict = {(col,row):available_numbers.difference(used_set(row,col,game)) for row in range(len(game)) for col in range(len(game[row])) if game[row][col] == 0}
+        #Numbers that follow the rules of Sudoku
+        return coord_dict 
 
-    return coord_dict 
+def solution_possible(value_sets):
 
-def solution_possible(game,values):
-
-    ''' Returns True if Every value that is 0 has a non empty set of possible values '''
-
-    for row in range(len(game)):
-
-        for column in range(len(game)):
-
-            if game[row][column] == 0 and (not (column,row) in values or len(values[(column,row)]) == 0):
-
-                return False
+    ''' Returns True if Every Null value has a Non-Empty set of possible values '''
+    
+    for val in value_sets.values():
+        if len(val)==0:
+            return False
     else:
         return True
 
-def play_sudoku(board,cd=None): #recursive function
+def play_sudoku(board, value_sets=None ): #recursive function
 
-    if cd==None:
-        cd = return_possible_numbers(board) # set of possible values for each coordinate
+    if value_sets==None:
+        value_sets = return_possible_numbers(board) # set of possible values for each coordinate
     
-    sorted_keys = sorted(cd, key= lambda x: len(cd[x])) # prioritize numbers with the least number of possibilities
+    sorted_keys = sorted(value_sets, key = lambda x: len(value_sets[x])) # prioritize numbers with the least number of possibilities
     
     for key in sorted_keys:
-        column = key[0]
+        col = key[0]
         row = key[1]
         i=0     #iterator to determine if all values within set have been parsed
 
-        for value in cd[key]: 
+        for value in value_sets[key]: 
 
-            board[row][column] = value
+            board[row][col] = value
+
             i+=1
-            cd2 = return_possible_numbers(board)    # available numbers after board update
+            
+            updated_value_sets = value_sets.copy()
 
-            if solution_possible(board,cd2) == True: # break out of current values and try next point
+            del updated_value_sets[(col,row)]
+
+            updated_value_sets = return_possible_numbers(board,updated_value_sets,key)    # available numbers after the board has been update
+            
+            if len(updated_value_sets) ==0:
+
+                return board , updated_value_sets  
+
+            elif solution_possible(updated_value_sets) == True: #check if every point still has a possible value
                 
-                board = play_sudoku(board,cd2)          #recursive call
+                board , updated_value_sets = play_sudoku(board,updated_value_sets)          #recursive call
 
-                if len(return_possible_numbers(board)) ==0:     
-                    return board
+                if len(updated_value_sets) ==0:    #board may have been solved
+                    return board , updated_value_sets
                 else:
-                    board[row][column]= 0
+                    board[row][col]= 0
                     
-                    if i == len(cd[key]):   #game completion not possible with current board values
-                        return board
+                    if i == len(value_sets[key]):   #game completion not possible with current board values
+                        return board , value_sets
             else:
 
-                board[row][column]= 0
+                board[row][col] = 0
 
-                if i == len(cd[key]):   #game completion not possible with current board values
-                    return board
-                 
-    return board
+                if i == len(value_sets[key]):   #game completion not possible with current board values
+                    return board ,value_sets               # go back and choose a different value
+
+    return board, updated_value_sets
 
 '''
 original_board = [
@@ -117,7 +124,7 @@ original_board = [
 [4,0,0,7,0,0,2,3,8]]
 '''
 
-original_board=[
+'''original_board=[
 [1,0,0,0,6,0,9,0,0],
 [0,0,9,0,7,0,0,3,0],
 [0,0,0,0,0,0,4,0,1],
@@ -126,11 +133,31 @@ original_board=[
 [3,0,0,0,0,8,0,4,2],
 [0,8,0,0,0,6,0,9,0],
 [0,0,3,0,5,0,0,2,0],
-[0,0,0,0,0,0,0,0,0]]
+[0,0,0,0,0,0,0,0,0]]'''
 
-#Logs which numbers are changeable by program
-#bool_mask = [[False if y > 0 else True for y in x ] for x in original_board]
+'''original_board=[
+[0,5,6,9,0,0,0,7,0],
+[0,0,0,0,1,0,0,0,8],
+[4,0,0,0,0,0,0,0,0],
+[9,0,0,0,0,0,0,4,0],
+[2,0,0,3,0,0,0,0,0],
+[0,4,3,0,0,8,0,0,7],
+[0,0,0,0,0,9,6,0,0],
+[0,0,2,0,0,0,0,0,0],
+[0,3,7,6,0,0,0,5,0],
+]'''
 
-solved_board=play_sudoku(original_board)
+original_board=[
+    [6,0,9,0,0,0,0,0,4],
+    [0,8,0,3,0,6,0,0,0],
+    [0,0,0,0,5,7,0,0,6],
+    [0,0,1,0,0,0,0,4,7],
+    [0,0,0,0,1,0,0,0,0],
+    [8,5,0,0,0,0,2,0,0],
+    [1,0,0,6,2,0,0,0,0],
+    [0,0,0,5,0,8,0,7,0],
+    [2,0,0,0,0,0,6,0,3]]
+
+solved_board=play_sudoku(original_board)[0]
 
 print(solved_board)
