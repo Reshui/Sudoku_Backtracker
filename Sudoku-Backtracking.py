@@ -12,9 +12,13 @@ FPS = 30
 
 default_text_color = (0, 0, 0)
 
-false_path_color = (135, 209, 236)
-background_color = (255, 255, 255)
-attempted_path_color = (159, 162, 162)
+false_path_color = (255, 140, 38)
+
+background_color = (233, 233, 233)
+
+attempted_path_color = (125, 114, 122)
+
+user_input_color = (203, 153, 190)
 
 pygame.init()
 
@@ -27,7 +31,7 @@ def update_screen(images):
     clock.tick(FPS)
 
 
-class Game:
+class NewPuzzle:
 
     def __init__(self, screen, squares=None):
 
@@ -39,7 +43,30 @@ class Game:
         self.new_square_values(squares)
         self.path = []
 
+    def generate_board(self):
+        '''self.board = [
+            [0, 0, 0, 0, 0, 9, 0, 5, 2],
+            [0, 3, 4, 0, 0, 0, 7, 8, 0],
+            [5, 0, 0, 0, 0, 8, 1, 0, 4],
+            [0, 0, 0, 0, 0, 0, 0, 0, 7],
+            [4, 0, 0, 0, 0, 0, 0, 0, 3],
+            [0, 9, 8, 0, 0, 0, 4, 0, 0],
+            [0, 0, 0, 0, 8, 4, 9, 0, 0],
+            [0, 0, 0, 9, 3, 0, 0, 0, 0],
+            [9, 7, 0, 0, 0, 0, 0, 0, 0]]
+
+        return'''
+
+        response = requests.get(
+            url="https://sugoku.herokuapp.com/board?difficulty=hard")
+
+        if response.ok == True:
+            board = list(response.json()['board'])
+
+        self.board = board
+
     def new_square_values(self, square_dict=None):
+        '''Generates a dictionary containing every square within the board'''
 
         if square_dict == None:
             # Create new square objects
@@ -72,18 +99,8 @@ class Game:
 
                 self.squares = new_squares
 
-    def generate_board(self):
-
-        response = requests.get(
-            url="https://sugoku.herokuapp.com/board?difficulty=hard")
-
-        if response.ok == True:
-            board = list(response.json()['board'])
-
-        self.board = board
-
     def return_block_number(self, coord):
-        ''' returns which block the current coordinate is in'''
+        ''' returns which 3x3 block the current coordinate is in'''
         block_number = (coord[0] // 3) + (3 * (coord[1] // 3))
 
         return block_number
@@ -166,7 +183,7 @@ class Game:
 
                 rects_to_update = square_to_update.update_square(
                     self.board[row][col], clr)
-                #draw_board(board,False,key[0:2], reverse_decision= True)
+                # draw_board(board,False,key[0:2], reverse_decision= True)
                 update_screen(rects_to_update)
 
 
@@ -286,16 +303,6 @@ def draw_board(square_set, surface):
     pygame.display.update()
 
 
-def solution_possible(value_sets):
-    ''' Returns True if Every Null value has a Non-Empty set of possible values '''
-
-    for val in value_sets.values():
-        if val == None or len(val) == 0:
-            return False
-    else:
-        return True
-
-
 if __name__ == "__main__":
 
     screen = pygame.display.set_mode(
@@ -303,17 +310,23 @@ if __name__ == "__main__":
 
     clock = pygame.time.Clock()
 
-    pygame.display.set_caption("Sudoku Solver")
+    pygame.display.set_caption("Sudoku")
 
-    game = Game(screen)
+    game = NewPuzzle(screen)
 
-    initiate_algo = ActionButton("Solving Algorithm", square_length, 20 + square_length*4,
+    initiate_algo = ActionButton("Solve Puzzle", square_length, 20 + square_length*4,
                                  game.squares[(8, 0, 2)].x + square_length*3, game.squares[(8, 0, 2)].y, attempted_path_color, screen)
 
-    new_puzzle = ActionButton("New Puzzle", initiate_algo.height, initiate_algo.width, initiate_algo.x,
-                              initiate_algo.y + initiate_algo.height + 30, attempted_path_color, screen)
+    generate_new_puzzle = ActionButton("New Puzzle", initiate_algo.height, initiate_algo.width, initiate_algo.x,
+                                       initiate_algo.y + initiate_algo.height + 30, attempted_path_color, screen)
 
-    draw_buttons([initiate_algo, new_puzzle])
+    draw_buttons([initiate_algo, generate_new_puzzle])
+
+    valid_numbers = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
+                     pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9,
+                     pygame.K_KP1, pygame.K_KP2, pygame.K_KP3,
+                     pygame.K_KP4, pygame.K_KP5, pygame.K_KP6, pygame.K_KP7,
+                     pygame.K_KP8, pygame.K_KP9]
 
     continue_attempt = True
     use_alternate_path = False
@@ -321,97 +334,120 @@ if __name__ == "__main__":
     execute_solve_algorithm = False
     show_steps = True
     running = True
-    clicked_square = False
+    selected_square = None
 
-    while running:
+while running:
 
-        for event in pygame.event.get():
+    for event in pygame.event.get():
 
-            if event.type == pygame.QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
+        if event.type == pygame.QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
 
-                pygame.quit()
-                running = False
+            pygame.quit()
+            running = False
 
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+        elif event.type == pygame.MOUSEBUTTONDOWN:
 
-                if initiate_algo.shape.collidepoint(pygame.mouse.get_pos()):
-                    execute_solve_algorithm = True
-                    clicked_square = False
-                elif new_puzzle.shape.collidepoint(pygame.mouse.get_pos()):
+            if initiate_algo.shape.collidepoint(pygame.mouse.get_pos()):
 
-                    puzzle_solved = False
-                    execute_solve_algorithm = False
+                execute_solve_algorithm = True
+                selected_square = None
+
+            elif generate_new_puzzle.shape.collidepoint(pygame.mouse.get_pos()):
+
+                puzzle_solved = False
+                execute_solve_algorithm = False
+                use_alternate_path = False
+                selected_square = None
+                game = NewPuzzle(screen, game.squares.copy())
+
+            elif execute_solve_algorithm == False:
+
+                for square_key, puzzle_square in game.squares.items():
+                    if puzzle_square.square.collidepoint(pygame.mouse.get_pos()):
+                        selected_square = square_key
+                        break
+
+        elif event.type == pygame.KEYDOWN:
+
+            if event.key in valid_numbers and selected_square != None and execute_solve_algorithm == False:
+
+                user_input = (valid_numbers.index(event.key))
+
+                if user_input < 9:
+                    user_input += 1
+                else:
+                    user_input -= 8
+
+                update_screen(game.squares[selected_square].update_square(
+                    user_input, user_input_color, True))
+
+    if not puzzle_solved and execute_solve_algorithm == True:
+
+        if use_alternate_path == True:
+
+            previous_path = game.path.pop()
+
+            key = previous_path[0]
+
+            game.possible_paths = previous_path[2]
+
+            used_from_set = previous_path[1]
+
+        else:
+
+            sorted_keys = sorted(game.possible_paths,
+                                 key=lambda x: len(game.possible_paths[x]))
+
+            key = sorted_keys[0]
+            used_from_set = set()
+
+        current_square = game.squares[key]
+
+        if use_alternate_path:  # Show that the current path is False
+            game.draw_false(current_square, key, show_steps)
+
+        # loop through every value to determine possible solution path
+        for item_number, value in enumerate(game.possible_paths[key]):
+
+            if use_alternate_path == False or (use_alternate_path == True and value not in used_from_set):
+
+                new_value_sets = game.possible_paths.copy()
+
+                del new_value_sets[key]
+
+                col = key[0]
+                row = key[1]
+
+                game.board[row][col] = value
+
+                used_from_set.add(value)
+
+                update_screen(current_square.update_square(
+                    value, attempted_path_color))
+
+                new_value_sets, continue_attempt = game.return_possible_numbers(
+                    new_value_sets, key, value)    # available numbers after the board has been update
+
+                if len(new_value_sets) == 0:
+
+                    puzzle_solved = True
+                    break
+
+                elif continue_attempt == True:
+
                     use_alternate_path = False
-                    clicked_square = False
-                    game = Game(screen, game.squares.copy())
 
-        if not puzzle_solved and execute_solve_algorithm == True:
+                    game.path.append(
+                        [key, used_from_set, game.possible_paths.copy()])
 
-            if use_alternate_path == True:
+                    game.possible_paths = new_value_sets
 
-                previous_path = game.path.pop()
+                    break
 
-                key = previous_path[0]
+                else:
+                    # Show that the board isn't solvable with the current value
+                    game.draw_false(current_square, key, show_steps)
 
-                game.possible_paths = previous_path[2]
-
-                used_from_set = previous_path[1]
-
-            else:
-
-                sorted_keys = sorted(game.possible_paths,
-                                     key=lambda x: len(game.possible_paths[x]))
-
-                key = sorted_keys[0]
-                used_from_set = set()
-
-            current_square = game.squares[key]
-
-            if use_alternate_path:  # Show that the current path is False
-                game.draw_false(current_square, key, show_steps)
-
-            # loop through every value to determine possible solution path
-            for item_number, value in enumerate(game.possible_paths[key]):
-
-                if use_alternate_path == False or (use_alternate_path == True and value not in used_from_set):
-
-                    new_value_sets = game.possible_paths.copy()
-
-                    del new_value_sets[key]
-
-                    col = key[0]
-                    row = key[1]
-
-                    game.board[row][col] = value
-
-                    used_from_set.add(value)
-
-                    update_screen(current_square.update_square(
-                        value, attempted_path_color))
-
-                    new_value_sets, continue_attempt = game.return_possible_numbers(
-                        new_value_sets, key, value)    # available numbers after the board has been update
-
-                    if len(new_value_sets) == 0:
-
-                        puzzle_solved = True
+                    if len(game.possible_paths[key].difference(used_from_set)) == 0:
+                        use_alternate_path = True
                         break
-
-                    elif continue_attempt == True:
-
-                        use_alternate_path = False
-
-                        game.path.append(
-                            [key, used_from_set, game.possible_paths.copy()])
-
-                        game.possible_paths = new_value_sets
-
-                        break
-
-                    else:
-                        # Show that the board isn't solvable with the current value
-                        game.draw_false(current_square, key, show_steps)
-
-                        if len(game.possible_paths[key].difference(used_from_set)) == 0:
-                            use_alternate_path = True
-                            break
