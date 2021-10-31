@@ -8,18 +8,24 @@ from pygame.locals import *
 screen_size = 11 * 60  # number should be divisible by 11
 square_length = screen_size // 11
 
-FPS = 30
+FPS = 60  # 30
 
 default_text_color = (0, 0, 0)
 false_path_color = (255, 140, 38)
 background_color = (233, 233, 233)
 attempted_path_color = (125, 114, 122)
 user_input_color = (203, 153, 190)
-selected_square_color = (215, 172, 72)
+selected_square_color = (161, 218, 232)
 pygame.init()
 
 used_font = pygame.font.SysFont('Comic Sans MS', 35)
 button_font = pygame.font.SysFont('Comic Sans MS', 27)
+
+valid_numbers = [pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
+                 pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9,
+                 pygame.K_KP0, pygame.K_KP1, pygame.K_KP2, pygame.K_KP3,
+                 pygame.K_KP4, pygame.K_KP5, pygame.K_KP6, pygame.K_KP7,
+                 pygame.K_KP8, pygame.K_KP9]
 
 
 def update_screen(images):
@@ -91,7 +97,7 @@ class NewPuzzle:
             draw_board(self.squares, self.screen)
 
         else:
-            # Edit the existing values for each square
+            # Edit the existing values for each square on the gui.... used for generating new puzzles
 
             updated_portion = []
             new_squares = {}
@@ -335,7 +341,7 @@ def check_events(execute_solve_algorithm, selected_square=None, puzzle_solved=Fa
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
 
-            if not execute_solve_algorithm and initiate_algo.shape.collidepoint(pygame.mouse.get_pos()):
+            if puzzle_solved == False and not execute_solve_algorithm and initiate_algo.shape.collidepoint(pygame.mouse.get_pos()):
                 selected_square = None
                 return enter_algo_loop, selected_square, puzzle_solved
 
@@ -371,12 +377,13 @@ def check_events(execute_solve_algorithm, selected_square=None, puzzle_solved=Fa
 
             elif execute_solve_algorithm == False and puzzle_solved == False:
 
+                previous_square_available = True if selected_square != None else False
+
                 for square_key, puzzle_square in game.squares.items():
                     # Only return a square on the board if it is clicked and doesn't hold the original non-zero numbers
                     if puzzle_square.square.collidepoint(pygame.mouse.get_pos()):
 
                         user_selected_same_square = True if square_key == selected_square else False
-                        previous_square_available = True if selected_square != None else False
 
                         update_previous_square = True if not user_selected_same_square and previous_square_available else False
 
@@ -384,10 +391,8 @@ def check_events(execute_solve_algorithm, selected_square=None, puzzle_solved=Fa
 
                             if update_previous_square:
 
-                                if game.squares[selected_square].value == 0:
-                                    square_color = background_color
-                                else:
-                                    square_color = user_input_color
+                                square_color = background_color if game.squares[
+                                    selected_square].value == 0 else user_input_color
 
                                 update_screen(game.squares[selected_square].update_square(
                                     game.squares[selected_square].value, square_color, True))
@@ -400,6 +405,16 @@ def check_events(execute_solve_algorithm, selected_square=None, puzzle_solved=Fa
                                     game.squares[selected_square].value, selected_square_color, True))
 
                         return not enter_algo_loop, selected_square, puzzle_solved
+                # user has clicked on an empty space so remove reference key if they attempt to type a number
+
+                if previous_square_available and game.squares[
+                        selected_square].value == 0:
+                    # User pressed a square within the board and then an empty space
+                    # Change previous square white if empty
+                    update_screen(game.squares[selected_square].update_square(
+                        game.squares[selected_square].value, background_color, True))
+
+                return not enter_algo_loop, None, puzzle_solved
 
         elif event.type == pygame.KEYDOWN:
 
@@ -407,10 +422,7 @@ def check_events(execute_solve_algorithm, selected_square=None, puzzle_solved=Fa
 
                 user_input = (valid_numbers.index(event.key)) % 10
 
-                if user_input == 0:
-                    input_color = background_color
-                else:
-                    input_color = user_input_color
+                input_color = background_color if user_input == 0 else user_input_color
 
                 update_screen(game.squares[selected_square].update_square(
                     user_input, input_color, True))
@@ -422,17 +434,17 @@ def check_events(execute_solve_algorithm, selected_square=None, puzzle_solved=Fa
 
 
 def solve_sudoku(path_sets, show_steps):
+    '''Recursive function that solves sudoku puzzles for NewPuzzle classes stored in a variable called "game" 
+       Optionally show path on screen
+    '''
+    # Loop values corresponding to the square with the smallest number of possible values
+    key = sorted(path_sets,
+                 key=lambda x: len(path_sets[x]))[0]
 
-    # Sort paths by the number of possible values'
-    sorted_keys = sorted(path_sets,
-                         key=lambda x: len(path_sets[x]))
-    # Attempt solution with smallest number of branches
-    key = sorted_keys[0]
     #  Retrieve graphical object representing the selected point on the board
     if show_steps:
         gui_square = game.squares[key]
 
-    # loop through available values to determine possible solution path
     for value in path_sets[key]:
 
         if check_events(True) == True:
@@ -462,16 +474,13 @@ def solve_sudoku(path_sets, show_steps):
             elif continue_approach:
                 game.board[row][col] = value
                 return True, False
-
             else:
-                if show_steps:
-                    game.draw_false(gui_square, key, show_steps, value)
                 game.board[row][col] = 0
-        else:
-            # Show that the board isn't solvable with the current value
-            if show_steps:
-                game.draw_false(gui_square, key, show_steps, value)
+        # Show that the board isn't solvable with the current value.. won't run if on an acceptable path
+        if show_steps:
+            game.draw_false(gui_square, key, show_steps, value)
     else:
+
         return False, False
 
 
@@ -481,7 +490,6 @@ if __name__ == "__main__":
         (screen_size + square_length * 7, screen_size + square_length))
 
     clock = pygame.time.Clock()
-
     pygame.display.set_caption("Sudoku")
 
     game = NewPuzzle(screen)
@@ -497,12 +505,6 @@ if __name__ == "__main__":
                                  generate_new_puzzle.y + generate_new_puzzle.height + 30, attempted_path_color, screen)
 
     draw_buttons([initiate_algo, generate_new_puzzle, show_solution])
-
-    valid_numbers = [pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
-                     pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9,
-                     pygame.K_KP0, pygame.K_KP1, pygame.K_KP2, pygame.K_KP3,
-                     pygame.K_KP4, pygame.K_KP5, pygame.K_KP6, pygame.K_KP7,
-                     pygame.K_KP8, pygame.K_KP9]
 
     puzzle_solved = False
     execute_solve_algorithm = False
