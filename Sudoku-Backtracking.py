@@ -233,7 +233,7 @@ class NewPuzzle:
 
         #  Retrieve graphical object representing the selected point on the board
         if show_steps:
-            gui_square = game.squares[key]
+            gui_square = self.squares[key]
 
         for value in path_sets[key]:
 
@@ -271,7 +271,7 @@ class NewPuzzle:
 
             if show_steps:
                 # If algorithm reaches this conditional then a solution wasn't possible with the attempted value
-                game.draw_false(gui_square, key, show_steps, value)
+                self.draw_false(gui_square, key, show_steps, value)
         else:
             # Possible values with the given board have been exhausted ... go back and try a different solution path
             return False, False
