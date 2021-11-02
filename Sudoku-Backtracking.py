@@ -27,6 +27,8 @@ valid_numbers = [pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
                  pygame.K_KP4, pygame.K_KP5, pygame.K_KP6, pygame.K_KP7,
                  pygame.K_KP8, pygame.K_KP9]
 
+board_gen_number = 0
+
 
 def update_screen(images):
     pygame.display.update(images)
@@ -43,6 +45,7 @@ class NewPuzzle:
         self.screen = screen
         self.new_square_values(squares)
         self.path = []
+        self.create_solutions()
 
     def board_values(self, initiate_original):
         '''
@@ -61,34 +64,40 @@ class NewPuzzle:
             Solves the Sudoku board and stores each squares solution in a dictionary
         '''
         original_board = self.board.copy()
-
-        solve_sudoku(self.possible_paths, False)
+        # This will change values in self.board
+        self.solve_sudoku(self.possible_paths, False)
 
         self.correct_solutions = self.board_values(False)
 
         self.board = original_board
 
     def generate_board(self):
-        '''self.board = [
-            [0, 0, 0, 0, 0, 9, 0, 5, 2],
-            [0, 3, 4, 0, 0, 0, 7, 8, 0],
-            [5, 0, 0, 0, 0, 8, 1, 0, 4],
-            [0, 0, 0, 0, 0, 0, 0, 0, 7],
-            [4, 0, 0, 0, 0, 0, 0, 0, 3],
-            [0, 9, 8, 0, 0, 0, 4, 0, 0],
-            [0, 0, 0, 0, 8, 4, 9, 0, 0],
-            [0, 0, 0, 9, 3, 0, 0, 0, 0],
-            [9, 7, 0, 0, 0, 0, 0, 0, 0]]
 
-        return'''
+        global board_gen_number
 
-        response = requests.get(
-            url="https://sugoku.herokuapp.com/board?difficulty=hard")
+        board_gen_number += 1
 
-        if response.ok == True:
-            board = list(response.json()['board'])
+        if board_gen_number == 1:
 
-        self.board = board
+            self.board = [
+                [0, 6, 0, 0, 0, 8, 0, 9, 0],
+                [1, 0, 0, 0, 5, 9, 6, 0, 0],
+                [0, 0, 9, 1, 0, 0, 0, 0, 0],
+                [0, 0, 4, 0, 0, 6, 7, 0, 0],
+                [0, 0, 0, 0, 9, 2, 1, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [8, 0, 1, 0, 7, 5, 0, 0, 0],
+                [0, 7, 0, 2, 8, 0, 0, 1, 4]]
+
+        else:
+            response = requests.get(
+                url="https://sugoku.herokuapp.com/board?difficulty=hard")
+
+            if response.ok == True:
+                board = list(response.json()['board'])
+
+            self.board = board
 
     def new_square_values(self, square_dict=None):
         '''Generates a dictionary containing every square within the self.board'''
@@ -166,22 +175,23 @@ class NewPuzzle:
             available_numbers = set(range(1, 10))
             # Place set of numbers that follow the rules of Sudoku for each number inside a dictionary
             # key is (x,y,block_number)
-            gen_dict = {(col, row, self.return_block_number((col, row))): available_numbers.difference(self.used_set(
-                row, col)) for row in range(len(self.board)) for col in range(len(self.board[row])) if self.board[row][col] == 0}
+            gen_dict = {(col, row, self.return_block_number((col, row))):
+                        available_numbers.difference(self.used_set(row, col))
+                        for row in range(len(self.board)) for col in range(len(self.board[row]))
+                        if self.board[row][col] == 0}
             return gen_dict
 
     def used_set(self, row, col):
         '''Returns a set of invalid values for the given coordinate'''
 
         # game board is a 9x9 grid denoted into blocks of 3x3
-        blocks = [range(3), range(3, 6), range(6, 9)]
 
-        for block in blocks:
+        col_start = (col // 3)*3
 
-            if row in block:
-                row_block = block
-            if col in block:
-                col_block = block
+        row_start = (row // 3)*3
+
+        col_block = range(col_start, col_start+3)
+        row_block = range(row_start, row_start + 3)
 
         used_block = {self.board[yb][xb]
                       for yb in row_block for xb in col_block if self.board[yb][xb] != 0}
@@ -211,6 +221,60 @@ class NewPuzzle:
                     wrong_value, clr)
                 # draw_board(board,False,key[0:2], reverse_decision= True)
                 update_screen(rects_to_update)
+
+    def solve_sudoku(self, path_sets, show_steps):
+        '''
+        Recursive function that solves sudoku puzzles for NewPuzzle classes stored in a variable called "game" 
+        Optionally show path on screen
+        '''
+        # Loop values corresponding to the square with the smallest number of possible values
+        key = sorted(path_sets,
+                     key=lambda x: len(path_sets[x]))[0]
+
+        #  Retrieve graphical object representing the selected point on the board
+        if show_steps:
+            gui_square = game.squares[key]
+
+        for value in path_sets[key]:
+
+            if check_events(True) == True:
+                return False, True
+
+            if show_steps:
+                update_screen(gui_square.update_square(
+                    value, attempted_path_color))
+
+            # Returns remaining possible values for the other squares on the board as a dictionary
+            # Value_is_valid is True if using [value] on the board doesn't generate an empty set of possible values for another square
+            new_value_sets, value_is_valid = self.return_possible_numbers(
+                path_sets, key, value)
+
+            col = key[0]
+            row = key[1]
+
+            if len(new_value_sets) == 0:
+                # Recursive Exit condition
+                self.board[row][col] = value
+                return True, False
+            elif value_is_valid:
+                # Solution is still theoretically possible [0 Non-Empty sets of values for remaining squares ]
+                solution_found, system_interrupt = self.solve_sudoku(
+                    new_value_sets, show_steps)
+
+                if system_interrupt:
+                    # Exit Loop if user clicks New Puzzle or Show Solution
+                    return False, True
+                elif solution_found:
+
+                    self.board[row][col] = value
+                    return True, False
+
+            if show_steps:
+                # If algorithm reaches this conditional then a solution wasn't possible with the attempted value
+                game.draw_false(gui_square, key, show_steps, value)
+        else:
+            # Possible values with the given board have been exhausted ... go back and try a different solution path
+            return False, False
 
 
 class ActionButton:
@@ -354,7 +418,6 @@ def check_events(execute_solve_algorithm, selected_square=None, puzzle_solved=Fa
                 puzzle_solved = False
                 selected_square = None
                 game = NewPuzzle(screen, game.squares.copy())
-                game.create_solutions()
 
                 if execute_solve_algorithm:
                     return exit_algo_loop
@@ -438,61 +501,6 @@ def check_events(execute_solve_algorithm, selected_square=None, puzzle_solved=Fa
         return not exit_algo_loop
 
 
-def solve_sudoku(path_sets, show_steps):
-    '''Recursive function that solves sudoku puzzles for NewPuzzle classes stored in a variable called "game" 
-       Optionally show path on screen
-    '''
-    # Loop values corresponding to the square with the smallest number of possible values
-    key = sorted(path_sets,
-                 key=lambda x: len(path_sets[x]))[0]
-
-    #  Retrieve graphical object representing the selected point on the board
-    if show_steps:
-        gui_square = game.squares[key]
-
-    for value in path_sets[key]:
-
-        if check_events(True) == True:
-            return False, True
-
-        if show_steps:
-            update_screen(gui_square.update_square(
-                value, attempted_path_color))
-
-        new_value_sets, continue_attempt = game.return_possible_numbers(
-            path_sets, key, value)    # available numbers after the board has been update
-
-        col = key[0]
-        row = key[1]
-
-        if len(new_value_sets) == 0:
-            # Recursive Exit condition
-            game.board[row][col] = value
-            return True, False
-
-        elif continue_attempt == True:
-            # Solution is still theoretically possible [0 Non-Empty sets of values for remaining squares ]
-            continue_approach, system_interrupt = solve_sudoku(
-                new_value_sets, show_steps)
-
-            if system_interrupt:
-                # Exit Loop if user clicks New Puzzle or Show Solution
-                return False, True
-            elif continue_approach:
-                # Algorithm is exiting recursive loop after finding a puzzle solution
-                game.board[row][col] = value
-                return True, False
-            else:
-                # No solution with the attempted value... reset back to 0
-                game.board[row][col] = 0
-        # If algorithm reaches the below line then a solution wasn't possible with the retrieved value
-        if show_steps:
-            game.draw_false(gui_square, key, show_steps, value)
-    else:
-        # No values with the current board lead to a solution ... go back and try a different solution path
-        return False, False
-
-
 if __name__ == "__main__":
 
     screen = pygame.display.set_mode(
@@ -502,7 +510,6 @@ if __name__ == "__main__":
     pygame.display.set_caption("Sudoku")
 
     game = NewPuzzle(screen)
-    game.create_solutions()
 
     # Button that when pressed will visibly show the steps taken solve the sudoku
     initiate_algo = ActionButton("Solve Puzzle", square_length, 20 + square_length*4,
@@ -518,7 +525,6 @@ if __name__ == "__main__":
 
     puzzle_solved = False
     execute_solve_algorithm = False
-    show_steps = True
     # if not None then it references to a coordinate key within a dictionary holding pygame.Rect objects
     selected_square = None
 
@@ -529,5 +535,5 @@ if __name__ == "__main__":
 
         if not puzzle_solved and execute_solve_algorithm == True:
 
-            puzzle_solved = solve_sudoku(game.possible_paths, True)[0]
+            puzzle_solved = game.solve_sudoku(game.possible_paths, True)[0]
             execute_solve_algorithm = False
